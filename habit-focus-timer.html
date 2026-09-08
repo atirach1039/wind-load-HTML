@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Focus Ops — Habit & Focus Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#05070a;
+    --bg-vignette: radial-gradient(ellipse at 50% -10%, #101821 0%, #05070a 55%);
+    --panel:#0e131a;
+    --panel-2:#131920;
+    --border:#232b38;
+    --border-lit:#3a4556;
+    --amber:#ffb703;
+    --amber-dim:#7a5c14;
+    --amber-glow: rgba(255,183,3,0.35);
+    --green:#3ddc84;
+    --green-dim:#1c5238;
+    --green-glow: rgba(61,220,132,0.3);
+    --red:#ff5c5c;
+    --text:#dfe6ee;
+    --text-dim:#8b96a8;
+    --text-mute:#4d5766;
+    --radius:10px;
+    --font-display:'Orbitron', sans-serif;
+    --font-mono:'JetBrains Mono', monospace;
+    --font-ui:'Inter', sans-serif;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg-vignette), var(--bg);
+    background-attachment:fixed;
+    color:var(--text);
+    font-family:var(--font-ui);
+    min-height:100vh;
+    padding:20px;
+    position:relative;
+  }
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background:repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+    pointer-events:none;
+    z-index:1000;
+  }
+
+  .app{max-width:960px; margin:0 auto; position:relative;}
+
+  /* ---------- Topbar ---------- */
+  .topbar{
+    display:flex; align-items:baseline; justify-content:space-between;
+    padding:14px 20px; margin-bottom:16px;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+  }
+  .brand{display:flex; align-items:baseline; gap:12px;}
+  .brand .tag{
+    font-family:var(--font-display); font-weight:900; letter-spacing:0.14em;
+    color:var(--amber); font-size:1.05rem; text-shadow:0 0 14px var(--amber-glow);
+  }
+  .brand .sub{font-size:0.72rem; color:var(--text-mute); letter-spacing:0.06em; text-transform:uppercase;}
+  .clock{font-family:var(--font-mono); color:var(--text-dim); font-size:0.95rem; letter-spacing:0.05em;}
+
+  /* ---------- Layout ---------- */
+  .grid{display:grid; grid-template-columns: 1.1fr 1fr; gap:16px;}
+  @media (max-width: 760px){ .grid{grid-template-columns:1fr;} }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:18px;
+    position:relative;
+  }
+  .panel::before, .panel::after{
+    content:""; position:absolute; width:5px; height:5px; border-radius:50%;
+    background:radial-gradient(circle at 35% 35%, #4a5468, #1a2029);
+    top:9px;
+  }
+  .panel::before{left:9px;}
+  .panel::after{right:9px;}
+
+  .panel-head{
+    display:flex; justify-content:space-between; align-items:center;
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.14em;
+    color:var(--text-mute); text-transform:uppercase;
+    border-bottom:1px solid var(--border); padding-bottom:8px; margin-bottom:14px;
+  }
+  .panel-head span:last-child{color:var(--text-dim); text-transform:none; letter-spacing:0;}
+
+  /* ---------- Timer Gauge ---------- */
+  .mode-badge{
+    font-family:var(--font-mono); font-size:0.65rem; padding:2px 8px;
+    border:1px solid var(--border-lit); border-radius:20px; color:var(--text-dim);
+    letter-spacing:0.1em;
+  }
+  .mode-badge.running{color:var(--amber); border-color:var(--amber-dim); box-shadow:0 0 8px var(--amber-glow) inset;}
+  .mode-badge.running.break{color:var(--green); border-color:var(--green-dim); box-shadow:0 0 8px var(--green-glow) inset;}
+  .mode-badge.paused{color:var(--red); border-color:#5a2222;}
+
+  .gauge-wrap{position:relative; width:230px; height:230px; margin:6px auto 18px;}
+  .gauge{width:100%; height:100%; overflow:visible;}
+  .gauge-track, .gauge-progress{
+    fill:none; stroke-width:9; transform:rotate(-90deg); transform-origin:50% 50%;
+  }
+  .gauge-track{stroke:#1a212b;}
+  .gauge-progress{
+    stroke:var(--amber);
+    stroke-linecap:round;
+    transition:stroke-dashoffset 0.3s linear, stroke 0.4s ease;
+    filter:drop-shadow(0 0 6px var(--amber-glow));
+  }
+  .gauge-progress.break{stroke:var(--green); filter:drop-shadow(0 0 6px var(--green-glow));}
+  .tick{stroke:#2a3241;}
+  .tick.major{stroke:#465064;}
+
+  .gauge-readout{
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center;
+  }
+  .time-display{
+    font-family:var(--font-display); font-weight:700; font-size:2.5rem;
+    color:var(--text); letter-spacing:0.02em;
+    text-shadow:0 0 18px rgba(223,230,238,0.15);
+  }
+  .phase-label{
+    font-family:var(--font-mono); font-size:0.7rem; letter-spacing:0.2em;
+    color:var(--amber); margin-top:4px; text-transform:uppercase;
+  }
+  .phase-label.break{color:var(--green);}
+
+  .habit-select-row{
+    display:flex; align-items:center; gap:10px; margin-bottom:14px;
+    font-family:var(--font-mono); font-size:0.68rem; color:var(--text-mute); letter-spacing:0.1em;
+  }
+  .habit-select-row select{
+    flex:1; background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+    font-family:var(--font-ui); font-size:0.85rem; padding:8px 10px; border-radius:6px;
+  }
+
+  .controls{display:flex; gap:8px; margin-bottom:14px;}
+  .btn{
+    flex:1; padding:10px; border-radius:6px; border:1px solid var(--border-lit);
+    background:var(--panel-2); color:var(--text); font-family:var(--font-ui); font-weight:600;
+    font-size:0.8rem; letter-spacing:0.05em; cursor:pointer; transition:all 0.15s ease;
+  }
+  .btn:hover:not(:disabled){border-color:var(--amber); color:var(--amber);}
+  .btn:disabled{opacity:0.35; cursor:not-allowed;}
+  .btn-primary{background:var(--amber); color:#1a1200; border-color:var(--amber); font-weight:700;}
+  .btn-primary:hover{filter:brightness(1.1);}
+
+  .presets{display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap;}
+  .presets button{
+    flex:1; min-width:60px; background:transparent; border:1px solid var(--border);
+    color:var(--text-dim); padding:7px 4px; border-radius:6px; font-family:var(--font-mono);
+    font-size:0.72rem; cursor:pointer;
+  }
+  .presets button:hover, .presets button.active{border-color:var(--amber); color:var(--amber);}
+
+  .custom-row{display:flex; gap:8px; align-items:end; margin-bottom:10px; font-size:0.72rem; color:var(--text-mute);}
+  .custom-row label{display:flex; flex-direction:column; gap:4px; flex:1;}
+  .custom-row input{
+    background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+    padding:6px; border-radius:5px; font-family:var(--font-mono); width:100%;
+  }
+  .custom-row button{
+    background:var(--panel-2); border:1px solid var(--border-lit); color:var(--text-dim);
+    padding:7px 10px; border-radius:5px; cursor:pointer; font-size:0.72rem;
+  }
+
+  .sound-toggle{display:flex; align-items:center; gap:6px; font-size:0.72rem; color:var(--text-mute); cursor:pointer;}
+
+  /* ---------- Habit list ---------- */
+  .habit-list{list-style:none; margin:0 0 12px; padding:0; display:flex; flex-direction:column; gap:6px;}
+  .habit-item{
+    display:flex; align-items:center; gap:10px; padding:9px 10px;
+    background:var(--panel-2); border:1px solid var(--border); border-radius:7px;
+  }
+  .habit-item.done{border-color:var(--green-dim); box-shadow:0 0 0 1px var(--green-dim) inset;}
+  .habit-check{
+    width:18px; height:18px; border-radius:4px; border:1px solid var(--border-lit);
+    background:transparent; cursor:pointer; flex-shrink:0; position:relative;
+  }
+  .habit-check.checked{background:var(--green); border-color:var(--green);}
+  .habit-check.checked::after{
+    content:"✓"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:0.7rem; color:#062915; font-weight:700;
+  }
+  .habit-name{flex:1; font-size:0.86rem;}
+  .habit-streak{
+    font-family:var(--font-mono); font-size:0.72rem; color:var(--amber);
+    display:flex; align-items:center; gap:3px; white-space:nowrap;
+  }
+  .habit-del{
+    background:none; border:none; color:var(--text-mute); cursor:pointer; font-size:0.9rem;
+    padding:0 2px; line-height:1;
+  }
+  .habit-del:hover{color:var(--red);}
+
+  .add-habit-form{display:flex; gap:6px; margin-bottom:8px;}
+  .add-habit-form input{
+    flex:1; background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+    padding:8px 10px; border-radius:6px; font-family:var(--font-ui); font-size:0.82rem;
+  }
+  .add-habit-form button{
+    width:36px; background:var(--panel-2); border:1px solid var(--border-lit); color:var(--amber);
+    border-radius:6px; cursor:pointer; font-size:1rem;
+  }
+
+  .week-chart{width:100%; height:110px; display:block;}
+  .week-bar{fill:var(--amber); opacity:0.85;}
+  .week-bar.today{fill:var(--green);}
+  .week-label{fill:var(--text-mute); font-family:var(--font-mono); font-size:8px;}
+  .week-val{fill:var(--text-dim); font-family:var(--font-mono); font-size:7px;}
+
+  .session-log{list-style:none; margin:0; padding:0; max-height:150px; overflow-y:auto; display:flex; flex-direction:column; gap:5px;}
+  .session-log li{
+    display:flex; justify-content:space-between; font-family:var(--font-mono);
+    font-size:0.7rem; color:var(--text-dim); padding:6px 8px; background:var(--panel-2);
+    border-radius:5px; border:1px solid var(--border);
+  }
+  .session-log li span:last-child{color:var(--amber);}
+  .session-log:empty::after{content:"No sessions logged yet."; color:var(--text-mute); font-size:0.75rem;}
+  .empty-note{color:var(--text-mute); font-size:0.78rem; padding:6px 2px;}
+
+  .footer-note{
+    text-align:center; margin-top:14px; font-size:0.68rem; color:var(--text-mute);
+    font-family:var(--font-mono); letter-spacing:0.05em;
+  }
+  .footer-note button{
+    background:none; border:none; color:var(--text-mute); text-decoration:underline;
+    cursor:pointer; font-family:inherit; font-size:inherit;
+  }
+  .footer-note button:hover{color:var(--red);}
+
+  ::-webkit-scrollbar{width:6px;}
+  ::-webkit-scrollbar-thumb{background:var(--border-lit); border-radius:3px;}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand">
+      <span class="tag">FOCUS OPS</span>
+      <span class="sub">Habit &amp; Focus Console</span>
+    </div>
+    <div class="clock" id="clock">--:--:--</div>
+  </div>
+
+  <div class="grid">
+    <!-- TIMER PANEL -->
+    <section class="panel">
+      <div class="panel-head">
+        <span>Timer</span>
+        <span class="mode-badge" id="modeBadge">STANDBY</span>
+      </div>
+
+      <div class="gauge-wrap">
+        <svg class="gauge" viewBox="0 0 220 220">
+          <g id="ticks"></g>
+          <circle class="gauge-track" cx="110" cy="110" r="95"></circle>
+          <circle class="gauge-progress" id="gaugeProgress" cx="110" cy="110" r="95"></circle>
+        </svg>
+        <div class="gauge-readout">
+          <div class="time-display" id="timeDisplay">25:00</div>
+          <div class="phase-label" id="phaseLabel">WORK</div>
+        </div>
+      </div>
+
+      <div class="habit-select-row">
+        <span>TAGGED&nbsp;TO</span>
+        <select id="habitSelect"></select>
+      </div>
+
+      <div class="controls">
+        <button class="btn btn-primary" id="startBtn">START</button>
+        <button class="btn" id="pauseBtn" disabled>PAUSE</button>
+        <button class="btn" id="resetBtn">RESET</button>
+      </div>
+
+      <div class="presets" id="presets">
+        <button data-work="25" data-break="5" class="active">25 / 5</button>
+        <button data-work="50" data-break="10">50 / 10</button>
+        <button data-work="90" data-break="20">90 / 20</button>
+        <button id="customPresetBtn">CUSTOM</button>
+      </div>
+
+      <div class="custom-row" id="customRow" hidden>
+        <label>Work (min)<input type="number" id="customWork" min="1" max="180" value="25"></label>
+        <label>Break (min)<input type="number" id="customBreak" min="1" max="60" value="5"></label>
+        <button id="applyCustom">SET</button>
+      </div>
+
+      <label class="sound-toggle"><input type="checkbox" id="soundToggle" checked> Chime on completion</label>
+    </section>
+
+    <!-- SIDE PANEL -->
+    <section class="panel">
+      <div class="panel-head">
+        <span>Today's Habits</span>
+        <span id="dateReadout"></span>
+      </div>
+      <ul class="habit-list" id="habitList"></ul>
+      <form class="add-habit-form" id="addHabitForm">
+        <input type="text" id="newHabitName" placeholder="Add a habit..." maxlength="30">
+        <button type="submit">+</button>
+      </form>
+
+      <div class="panel-head" style="margin-top:18px">
+        <span>Weekly Focus</span>
+        <span id="weekTotal">0m</span>
+      </div>
+      <svg class="week-chart" id="weekChart" viewBox="0 0 280 110"></svg>
+
+      <div class="panel-head" style="margin-top:18px">
+        <span>Session Log</span>
+        <span></span>
+      </div>
+      <ul class="session-log" id="sessionLog"></ul>
+    </section>
+  </div>
+
+  <div class="footer-note">
+    Data is saved locally in this browser. <button id="resetAllBtn">Clear all data</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const STORAGE_KEY = "focusOpsData_v1";
+
+  function genId(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+  function fmtDate(d){
+    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  }
+  function todayStr(){ return fmtDate(new Date()); }
+  function pad2(n){ return String(n).padStart(2,"0"); }
+
+  // ---------- Default data ----------
+  function defaultData(){
+    return {
+      habits: [
+        { id: genId(), name: "English Practice", completedDates: [] },
+        { id: genId(), name: "Aptitude Training", completedDates: [] },
+        { id: genId(), name: "Engineering Work", completedDates: [] },
+        { id: genId(), name: "Fitness", completedDates: [] }
+      ],
+      sessions: [], // {id, habitId, habitName, minutes, date, ts}
+      settings: { workMin: 25, breakMin: 5, sound: true }
+    };
+  }
+
+  function loadData(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return defaultData();
+      const parsed = JSON.parse(raw);
+      if(!parsed.habits || !parsed.sessions || !parsed.settings) return defaultData();
+      return parsed;
+    }catch(e){
+      console.error("Failed to load data, resetting.", e);
+      return defaultData();
+    }
+  }
+
+  function saveData(){
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }catch(e){
+      console.error("Failed to save data", e);
+    }
+  }
+
+  let data = loadData();
+
+  // ---------- Streak calc ----------
+  function getStreak(dates){
+    const set = new Set(dates);
+    const t = todayStr();
+    let cursor = new Date();
+    if(!set.has(t)) cursor.setDate(cursor.getDate() - 1);
+    let streak = 0;
+    while(set.has(fmtDate(cursor))){
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return streak;
+  }
+
+  // ---------- Audio chime ----------
+  let audioCtx = null;
+  function playChime(){
+    if(!data.settings.sound) return;
+    try{
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const now = audioCtx.currentTime;
+      const notes = [880, 1108.73]; // A5, C#6 - simple two-tone chime
+      notes.forEach((freq, i)=>{
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, now + i*0.28);
+        gain.gain.linearRampToValueAtTime(0.25, now + i*0.28 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i*0.28 + 0.5);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(now + i*0.28);
+        osc.stop(now + i*0.28 + 0.55);
+      });
+    }catch(e){ /* audio not available, fail silently */ }
+  }
+
+  // ---------- Timer state ----------
+  const GAUGE_R = 95;
+  const CIRC = 2 * Math.PI * GAUGE_R;
+
+  let timer = {
+    phase: "work",           // 'work' | 'break'
+    status: "idle",          // 'idle' | 'running' | 'paused'
+    remainingMs: data.settings.workMin * 60000,
+    endTime: null,
+    intervalId: null
+  };
+
+  // ---------- DOM refs ----------
+  const $ = (id) => document.getElementById(id);
+  const clockEl = $("clock");
+  const modeBadge = $("modeBadge");
+  const timeDisplay = $("timeDisplay");
+  const phaseLabel = $("phaseLabel");
+  const gaugeProgress = $("gaugeProgress");
+  const habitSelect = $("habitSelect");
+  const startBtn = $("startBtn");
+  const pauseBtn = $("pauseBtn");
+  const resetBtn = $("resetBtn");
+  const presetsWrap = $("presets");
+  const customPresetBtn = $("customPresetBtn");
+  const customRow = $("customRow");
+  const customWork = $("customWork");
+  const customBreak = $("customBreak");
+  const applyCustom = $("applyCustom");
+  const soundToggle = $("soundToggle");
+  const habitListEl = $("habitList");
+  const addHabitForm = $("addHabitForm");
+  const newHabitName = $("newHabitName");
+  const dateReadout = $("dateReadout");
+  const weekChart = $("weekChart");
+  const weekTotal = $("weekTotal");
+  const sessionLogEl = $("sessionLog");
+  const resetAllBtn = $("resetAllBtn");
+
+  // ---------- Gauge ticks (drawn once) ----------
+  function buildTicks(){
+    const g = $("ticks");
+    g.setAttribute("transform", "rotate(-90 110 110)");
+    let html = "";
+    for(let i=0;i<60;i++){
+      const angle = (i/60) * 2*Math.PI;
+      const major = i % 5 === 0;
+      const rOuter = 108;
+      const rInner = major ? 100 : 104;
+      const x1 = 110 + rInner*Math.cos(angle);
+      const y1 = 110 + rInner*Math.sin(angle);
+      const x2 = 110 + rOuter*Math.cos(angle);
+      const y2 = 110 + rOuter*Math.sin(angle);
+      html += `<line class="tick${major?' major':''}" x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke-width="${major?2:1}"/>`;
+    }
+    g.innerHTML = html;
+    gaugeProgress.setAttribute("stroke-dasharray", CIRC.toFixed(2));
+  }
+
+  // ---------- Render: clock ----------
+  function renderClock(){
+    const d = new Date();
+    clockEl.textContent = pad2(d.getHours())+":"+pad2(d.getMinutes())+":"+pad2(d.getSeconds());
+  }
+  setInterval(renderClock, 1000);
+  renderClock();
+
+  // ---------- Render: habit select ----------
+  function renderHabitSelect(){
+    const prev = habitSelect.value;
+    habitSelect.innerHTML = '<option value="">Free focus (no habit)</option>' +
+      data.habits.map(h => `<option value="${h.id}">${escapeHtml(h.name)}</option>`).join("");
+    if(prev && data.habits.some(h=>h.id===prev)) habitSelect.value = prev;
+  }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  // ---------- Render: habit list ----------
+  function renderHabits(){
+    dateReadout.textContent = new Date().toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
+    if(data.habits.length === 0){
+      habitListEl.innerHTML = '<div class="empty-note">No habits yet — add one below.</div>';
+      return;
+    }
+    const t = todayStr();
+    habitListEl.innerHTML = data.habits.map(h=>{
+      const done = h.completedDates.includes(t);
+      const streak = getStreak(h.completedDates);
+      return `
+      <li class="habit-item${done?' done':''}" data-id="${h.id}">
+        <button class="habit-check${done?' checked':''}" data-action="toggle" data-id="${h.id}" aria-label="Mark done"></button>
+        <span class="habit-name">${escapeHtml(h.name)}</span>
+        <span class="habit-streak">🔥 ${streak}</span>
+        <button class="habit-del" data-action="delete" data-id="${h.id}" aria-label="Delete habit">✕</button>
+      </li>`;
+    }).join("");
+  }
+
+  // ---------- Render: weekly chart ----------
+  function renderWeekChart(){
+    const days = [];
+    for(let i=6;i>=0;i--){
+      const d = new Date();
+      d.setDate(d.getDate()-i);
+      days.push(d);
+    }
+    const totals = days.map(d=>{
+      const ds = fmtDate(d);
+      return data.sessions.filter(s=>s.date===ds).reduce((sum,s)=>sum+s.minutes,0);
+    });
+    const max = Math.max(...totals, 25); // floor so chart isn't empty-looking with small values
+    const barW = 26, gap = 12, chartH = 78, baseY = 92;
+    let svg = "";
+    days.forEach((d,i)=>{
+      const val = totals[i];
+      const h = Math.max((val/max) * chartH, val>0 ? 4 : 1);
+      const x = 8 + i*(barW+gap);
+      const y = baseY - h;
+      const isToday = i === 6;
+      svg += `<rect class="week-bar${isToday?' today':''}" x="${x}" y="${y}" width="${barW}" height="${h}" rx="3"></rect>`;
+      svg += `<text class="week-val" x="${x+barW/2}" y="${y-4}" text-anchor="middle">${val>0?val:''}</text>`;
+      svg += `<text class="week-label" x="${x+barW/2}" y="105" text-anchor="middle">${d.toLocaleDateString(undefined,{weekday:'narrow'})}</text>`;
+    });
+    weekChart.innerHTML = svg;
+    const weekSum = totals.reduce((a,b)=>a+b,0);
+    weekTotal.textContent = weekSum + "m";
+  }
+
+  // ---------- Render: session log ----------
+  function renderSessionLog(){
+    const recent = data.sessions.slice(-10).reverse();
+    sessionLogEl.innerHTML = recent.map(s=>{
+      const t = new Date(s.ts);
+      return `<li><span>${escapeHtml(s.habitName)}</span><span>${s.minutes}m · ${pad2(t.getHours())}:${pad2(t.getMinutes())}</span></li>`;
+    }).join("");
+  }
+
+  // ---------- Render: timer display ----------
+  function renderTimer(){
+    const totalMs = (timer.phase==="work" ? data.settings.workMin : data.settings.breakMin) * 60000;
+    const remaining = Math.max(timer.remainingMs, 0);
+    const mins = Math.floor(remaining/60000);
+    const secs = Math.floor((remaining%60000)/1000);
+    timeDisplay.textContent = pad2(mins) + ":" + pad2(secs);
+    phaseLabel.textContent = timer.phase === "work" ? "WORK" : "BREAK";
+    phaseLabel.classList.toggle("break", timer.phase==="break");
+
+    const progress = 1 - (remaining/totalMs); // 0 -> 1
+    const offset = CIRC * (1-progress);
+    gaugeProgress.setAttribute("stroke-dashoffset", offset.toFixed(2));
+    gaugeProgress.classList.toggle("break", timer.phase==="break");
+
+    modeBadge.textContent = timer.status === "running" ? "ACTIVE" : (timer.status==="paused" ? "PAUSED" : "STANDBY");
+    modeBadge.classList.toggle("running", timer.status==="running");
+    modeBadge.classList.toggle("break", timer.status==="running" && timer.phase==="break");
+    modeBadge.classList.toggle("paused", timer.status==="paused");
+
+    startBtn.textContent = timer.status === "paused" ? "RESUME" : "START";
+    startBtn.disabled = timer.status === "running";
+    pauseBtn.disabled = timer.status !== "running";
+  }
+
+  // ---------- Timer control ----------
+  function tick(){
+    const remaining = timer.endTime - Date.now();
+    if(remaining <= 0){
+      completePhase();
+    }else{
+      timer.remainingMs = remaining;
+      renderTimer();
+    }
+  }
+
+  function startInterval(){
+    clearInterval(timer.intervalId);
+    timer.intervalId = setInterval(tick, 250);
+  }
+
+  function startTimer(){
+    timer.endTime = Date.now() + timer.remainingMs;
+    timer.status = "running";
+    startInterval();
+    renderTimer();
+  }
+
+  function pauseTimer(){
+    timer.remainingMs = Math.max(timer.endTime - Date.now(), 0);
+    clearInterval(timer.intervalId);
+    timer.status = "paused";
+    renderTimer();
+  }
+
+  function resetTimer(){
+    clearInterval(timer.intervalId);
+    timer.status = "idle";
+    timer.phase = "work";
+    timer.remainingMs = data.settings.workMin * 60000;
+    renderTimer();
+  }
+
+  function completePhase(){
+    playChime();
+    if(timer.phase === "work"){
+      logSession();
+      timer.phase = "break";
+      timer.remainingMs = data.settings.breakMin * 60000;
+      timer.endTime = Date.now() + timer.remainingMs;
+      timer.status = "running";
+      startInterval();
+    }else{
+      clearInterval(timer.intervalId);
+      timer.phase = "work";
+      timer.remainingMs = data.settings.workMin * 60000;
+      timer.status = "idle";
+    }
+    renderTimer();
+  }
+
+  function logSession(){
+    const habitId = habitSelect.value;
+    const habit = data.habits.find(h=>h.id===habitId);
+    const session = {
+      id: genId(),
+      habitId: habitId || null,
+      habitName: habit ? habit.name : "Free focus",
+      minutes: data.settings.workMin,
+      date: todayStr(),
+      ts: Date.now()
+    };
+    data.sessions.push(session);
+    if(habit && !habit.completedDates.includes(todayStr())){
+      habit.completedDates.push(todayStr());
+    }
+    saveData();
+    renderHabits();
+    renderWeekChart();
+    renderSessionLog();
+  }
+
+  // ---------- Events: timer controls ----------
+  startBtn.addEventListener("click", ()=>{
+    if(timer.status === "idle" || timer.status === "paused") startTimer();
+  });
+  pauseBtn.addEventListener("click", pauseTimer);
+  resetBtn.addEventListener("click", resetTimer);
+
+  presetsWrap.querySelectorAll("button[data-work]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      presetsWrap.querySelectorAll("button").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+      customRow.hidden = true;
+      data.settings.workMin = parseInt(btn.dataset.work, 10);
+      data.settings.breakMin = parseInt(btn.dataset.break, 10);
+      saveData();
+      resetTimer();
+    });
+  });
+
+  customPresetBtn.addEventListener("click", ()=>{
+    presetsWrap.querySelectorAll("button[data-work]").forEach(b=>b.classList.remove("active"));
+    customWork.value = data.settings.workMin;
+    customBreak.value = data.settings.breakMin;
+    customRow.hidden = !customRow.hidden;
+  });
+
+  applyCustom.addEventListener("click", ()=>{
+    const w = Math.min(Math.max(parseInt(customWork.value,10)||25, 1), 180);
+    const b = Math.min(Math.max(parseInt(customBreak.value,10)||5, 1), 60);
+    data.settings.workMin = w;
+    data.settings.breakMin = b;
+    saveData();
+    resetTimer();
+    customRow.hidden = true;
+  });
+
+  soundToggle.addEventListener("change", ()=>{
+    data.settings.sound = soundToggle.checked;
+    saveData();
+  });
+
+  // ---------- Events: habits ----------
+  habitListEl.addEventListener("click", (e)=>{
+    const btn = e.target.closest("button[data-action]");
+    if(!btn) return;
+    const id = btn.dataset.id;
+    const habit = data.habits.find(h=>h.id===id);
+    if(!habit) return;
+    if(btn.dataset.action === "toggle"){
+      const t = todayStr();
+      const idx = habit.completedDates.indexOf(t);
+      if(idx === -1) habit.completedDates.push(t);
+      else habit.completedDates.splice(idx,1);
+      saveData();
+      renderHabits();
+    }else if(btn.dataset.action === "delete"){
+      if(confirm(`Delete habit "${habit.name}"? This won't remove past session history.`)){
+        data.habits = data.habits.filter(h=>h.id!==id);
+        saveData();
+        renderHabits();
+        renderHabitSelect();
+      }
+    }
+  });
+
+  addHabitForm.addEventListener("submit", (e)=>{
+    e.preventDefault();
+    const name = newHabitName.value.trim();
+    if(!name) return;
+    data.habits.push({ id: genId(), name, completedDates: [] });
+    newHabitName.value = "";
+    saveData();
+    renderHabits();
+    renderHabitSelect();
+  });
+
+  resetAllBtn.addEventListener("click", ()=>{
+    if(confirm("Clear all habits, sessions, and settings? This cannot be undone.")){
+      localStorage.removeItem(STORAGE_KEY);
+      data = defaultData();
+      saveData();
+      resetTimer();
+      renderHabitSelect();
+      renderHabits();
+      renderWeekChart();
+      renderSessionLog();
+    }
+  });
+
+  // ---------- Init ----------
+  buildTicks();
+  soundToggle.checked = data.settings.sound;
+  renderHabitSelect();
+  renderHabits();
+  renderWeekChart();
+  renderSessionLog();
+  resetTimer();
+
+})();
+</script>
+</body>
+</html>
